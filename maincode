@@ -1,0 +1,1636 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <Windows.h>
+#pragma warning (disable:4996)
+
+#define MAX_STAFF_QUANTITY 100
+#define ID_LENGTH 6 // Define the length of the ID
+#define MAX_TRAIN_QUANTITY 100
+#define MAX_DATE_LENGTH 11
+#define ticket_LENGTH 6
+#define MAX_COMMENT_QUANTITY 100
+
+int bookingNo = 0;
+int amount = 0;
+int payment = 0;
+int choose = 0;
+int staffQuantity = 1;
+int memberQuantity = 0;
+int trainQuantity = 0;
+int ticketQuantity = 0;
+char ticketIdPrefix;
+char currentMemberId[100];
+int loggedInMemberIndex = -1;
+int recoveryPassId;
+int commentQuantity = 0;
+
+static char ticketGenerate[ticket_LENGTH + 1]; // Static buffer to store the generated ID
+
+char generateRandomChar() {
+    // Generate a random character between 'A' and 'Z'
+    return 'A' + rand() % 26;
+}
+double generateRandomDigit() {
+    // Generate a random digit between 0 and 9
+    return rand() % 10;
+}
+char* get_today_date() {
+    static char today_date[MAX_DATE_LENGTH];
+    time_t current_time;
+    struct tm* time_info;
+    time(&current_time);
+    time_info = localtime(&current_time);
+    strftime(today_date, sizeof(today_date), "%Y-%m-%d", time_info);
+    return today_date;
+}
+void disable_echo() {
+    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode;
+    GetConsoleMode(hStdin, &mode);
+    mode &= ~ENABLE_ECHO_INPUT;
+    SetConsoleMode(hStdin, mode);
+}
+void enable_echo() {
+    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode;
+    GetConsoleMode(hStdin, &mode);
+    mode |= ENABLE_ECHO_INPUT;
+    SetConsoleMode(hStdin, mode);
+}
+
+struct Staff {
+    char staff_ID[100];
+    char name[100];
+    char password[100];
+    char gender;
+};
+struct Train {
+    char Id[10];
+    char departureSta[30];
+    char arrivalSta[30];
+    char departureDate[11];
+    char arriveDate[11];
+    int departureTime;
+    int arriveTime;
+    int seats;
+    float price;
+}trains;
+struct Ticket {
+    int ticketId;
+    int bookingNo;
+    char memberId[11];
+    struct Train train; // Now struct Train is fully defined
+    char bookingDate[15];
+    char departureDate[15];
+    char seatPrefix;
+    int seatNum;
+    char coach;
+    int quantity;
+    char paymentInfo[20];
+    double amount;
+    char ticketStatus[20];
+    char id[100];
+    char departureSta[100];
+    char arrivalSta[100];
+
+
+}tickets;
+struct Member {
+    char member_ID[100];
+    char name[100];
+    char password[100];
+    char gender;
+    char ic[100];
+    int commentQuantity;
+    int numTickets; // Keep track of the number of tickets for each member
+    double priceAmount;
+    char recoveryPass[100];
+    char recPassword[100];
+};
+struct Comments {
+    char commentContent[100];
+    char commentType[20];
+    char memberId[10];
+};
+
+// Global arrays
+struct Staff staff[MAX_STAFF_QUANTITY];
+struct Member member[MAX_STAFF_QUANTITY];
+struct Train train[MAX_TRAIN_QUANTITY];
+struct Ticket ticket[MAX_TRAIN_QUANTITY][251];
+struct Comments comment[MAX_COMMENT_QUANTITY];
+
+void displayMemberTickets(void);
+void loadFromFile(void);
+void mainMenu(void);
+void staffLogin(void);
+void staffModule(void);
+void addStaff(void);
+void deleteStaff(void);
+void displayStaff(void);
+void saveToFile(void);
+void addmember(void);
+int memberLogin(void);
+void memberModule(void);
+void ticketModule(void);
+void displayMember(void);
+void logout(void);
+void checkMember(void);
+void addTrain(void);
+void recoveryPassword(void);
+void deleteMember(void);
+void ticketSite(void);
+void displayTicket(void);
+void modifyTicket(void);
+void searchTicket(void);
+void trainModule(void);
+void searchSchedule(void);
+void modifySchedule(void);
+void displaySchedule(void);
+void deleteSchedule(void);
+void logOut(void);
+void signOut(void);
+void modifyMember(void);
+void displayMemberInformation(void);
+void modifyStaff(void);
+void Comment(void);
+void viewReview(void);
+void main(void) {
+    strcpy(staff[0].staff_ID, "ST0001");
+    strcpy(staff[0].password, "1234");
+    strcpy(staff[0].name, "Matthew Yiong");
+    (staff[0].gender = 'm');
+    loadFromFile();
+    mainMenu();
+}
+void mainMenu(void) {
+    
+    do {
+        choose = 0;
+        system("cls");
+        printf(" __\n");
+        printf("/|||\\`.__\n");
+        printf("(   _    _ _\n");
+        printf("=`-()--()'\n\n\n");
+        printf("--------------------------------------------\n");
+        printf("|   Welcome to LRT train ticket system     |\n");
+        printf("|                                          |\n");
+        printf("|------------------------------------------|\n");
+        printf("|Select 1 for Staff Information Module.    |\n");
+        printf("|Select 2 for Member Information Module.   |\n");
+        printf("|Select 3 for Train Scheduling Module.     |\n");
+        printf("|Select 4 for Ticket Booking Module.       |\n");
+        printf("|Select 5 for exit.                        |\n");
+        printf("--------------------------------------------\n");
+        printf("\nEnter your selection       :");
+        rewind(stdin);
+        (void)scanf(" %d", &choose);
+        if (choose == 1) {
+            staffLogin();
+        }
+        else if (choose == 2) {
+            memberModule();
+        }
+        else if (choose == 3) {
+            trainModule();
+        }
+        else if (choose == 4) {
+            ticketSite();
+        }
+    } while (choose != 5);
+
+    saveToFile();
+}
+void loadFromFile(void) {
+    FILE* fp;
+    int i = 0;
+    int j = 0;
+    int t = 0;
+    int k = 0;
+    int a = 0;
+    int b = 0;
+    int c = 0;
+    fp = fopen("staff.txt", "r");
+    if (fp == NULL) {
+
+        staffQuantity = 1;
+    }
+    else {
+        while (fscanf(fp, "%s %[^\t] %c %s \n", staff[i].staff_ID, staff[i].name, &staff[i].gender, staff[i].password ) != EOF) {
+            i++;
+        }
+        fclose(fp);
+        staffQuantity = i;
+    }
+
+    fp = fopen("train.bin", "rb");
+    if (fp == NULL) {
+
+
+    }
+    else {
+        while (fread(&train[t], sizeof(trains), 1, fp) != 0) {
+            t++;
+
+        }
+        trainQuantity = t;
+        fclose(fp);
+    }
+
+    fp = fopen("ticket file.bin", "rb");
+    if (fp != NULL) {
+        fread(&ticketQuantity, sizeof(int), 1, fp);
+        for (a = 0; a < MAX_TRAIN_QUANTITY; a++) {
+            b = 0; 
+            while (fread(&ticket[a][b], sizeof(tickets), 1, fp) == 1 && b < 250) {
+                b++; 
+
+            }
+        }
+
+        fclose(fp);
+    }
+
+    fp = fopen("member.txt", "r");
+    if (fp == NULL) {
+        memberQuantity = 0;
+    }
+    else {
+        while (fscanf(fp, " %[^\t] %[^\t] %[^\t] %[^\t] %[^\t] %[^\t] %[^\t] %lf\n", member[j].member_ID, member[j].name, &member[j].gender, member[j].password, member[j].ic, member[j].recoveryPass, member[j].recPassword, &member[j].priceAmount) != EOF) {
+            j++; 
+        }
+        fclose(fp);
+        memberQuantity = j;
+    }
+
+    fp = fopen("comment.bin", "r");
+    if (fp == NULL) {
+        commentQuantity = 0;
+    }
+    else {
+        while (fread(&comment, sizeof(struct Comments), 1, fp) != 0) {
+            commentQuantity++;
+        }
+        fclose(fp);
+    }
+}
+void saveToFile(void) {
+    FILE* fp;
+    int k = 0;
+    int j = 0;
+    int i;
+    fp = fopen("staff.txt", "w");
+    for (i = 0; i < staffQuantity; i++) {
+        fprintf(fp, "%s %s\t %c %s \n", staff[i].staff_ID, staff[i].name, staff[i].gender, staff[i].password);
+    }
+    fclose(fp);
+    fp = fopen("member.txt", "w");
+    for (i = 0; i < memberQuantity; i++) {
+        fprintf(fp, " %s\t %s\t %c\t %s\t %s\t %s\t %s\t %f\n", member[i].member_ID, member[i].name, member[i].gender, member[i].password, member[i].ic, member[i].recoveryPass, member[i].recPassword, member[i].priceAmount);
+    }
+    fclose(fp);
+
+    fp = fopen("ticket file.bin", "wb+");
+    fwrite(&ticketQuantity, sizeof(int), 1, fp);
+    for (int t = 0; t < trainQuantity; t++) {
+        fwrite(&ticket[t], sizeof(struct Ticket), 251, fp);
+    }
+    fclose(fp);
+
+    fp = fopen("train.bin", "wb+");
+    fwrite(&train, sizeof(struct Train), trainQuantity, fp);
+    fclose(fp);
+
+    fp = fopen("comment.bin", "wb");
+    fwrite(&comment, sizeof(struct Comments), commentQuantity, fp);
+    fclose(fp);
+    system("pause");
+    exit(0);
+
+}
+
+//Staff Module
+void staffModule(void) {
+    int choice = '\0';
+    do {
+        choice = '\0';
+        printf("\n-------------------------------------------\n");
+        printf("|Please choose your action:               |\n");
+        printf("|-----------------------------------------|\n");
+        printf("|1. Add Staff Information                 |\n");
+        printf("|2. Delete Staff Information              |\n");
+        printf("|3. View Staff Information                |\n");
+        printf("|4. Display Member                        |\n");
+        printf("|5. Add Train                             |\n");
+        printf("|6. Delete Member                         |\n");
+        printf("|7. Modify Staff Information              |\n");
+        printf("|8. View Review                           |\n");
+        printf("|9. Return to the main menu               |\n");
+        printf("-------------------------------------------\n");
+        printf("\nSelect                :");
+        rewind(stdin);
+        (void)scanf("%d", &choice);
+        if (choice == 1) {
+            addStaff();
+        }
+        else if (choice == 2) {
+            deleteStaff();
+        }
+        else if (choice == 3) {
+            displayStaff();
+        }
+        else if (choice == 4) {
+            displayMember();
+        }
+        else if (choice == 5) {
+            addTrain();
+        }
+        else if (choice == 6) {
+            deleteMember();
+        }
+        else if (choice == 7) {
+            modifyStaff();
+        }
+        else if (choice == 8) {
+            viewReview();
+        }
+    } while (choice != 9);
+
+}
+void staffLogin(void) {
+    char id[100] = "\0";
+    char password[100] = "\0";
+    int found = -1;
+    while (1) {
+        printf("\nPlease enter your staff ID  :");
+        rewind(stdin);
+        (void)scanf("%s", id);
+        for (int i = 0; i < staffQuantity; i++) {
+            if (strcmp(id, staff[i].staff_ID) == 0) {
+                found = i;
+            }
+        }
+        if (found != -1) {
+            while (1) {
+                printf("Please enter your password  :");
+                rewind(stdin);
+                disable_echo();
+                (void)scanf("%[^\n]", password);
+                enable_echo();
+                if (strcmp(password, staff[found].password) == 0) {
+                    staffModule();
+                    break;
+                }
+                else {
+                    printf("Invalid password please try again!\n");
+                }
+            }
+            break;
+        }
+        else {
+            printf("Your staff id is invalid please try again!\n");
+        }
+
+
+    }
+}
+void addStaff(void) {
+
+    char firstPassword[20] = "\0";
+    char secondPassword[20] = "\0";
+    srand(time(NULL)); // Seed the random number generator with the current time
+
+    // Generate the random ID
+    char id[ID_LENGTH + 1]; // +1 for the null terminator
+    for (int i = 0; i < ID_LENGTH; i++) {
+        if (i % 2 == 0) {
+            id[i] = generateRandomChar(); // Generate a random character for even positions
+        }
+        else {
+            id[i] = '0' + generateRandomDigit(); // Generate a random digit for odd positions
+        }
+    }
+    id[ID_LENGTH] = '\0'; // Null-terminate the string
+
+    printf("\nPlease enter new staff name  :");
+    rewind(stdin);
+    (void)scanf("%[^\n]", staff[staffQuantity].name);
+
+    while (1) {
+        printf("Please enter gender of staff :");
+        rewind(stdin);
+        (void)scanf("%c", &staff[staffQuantity].gender);
+
+        if (staff[staffQuantity].gender == 'F' || staff[staffQuantity].gender == 'f' || staff[staffQuantity].gender == 'M' || staff[staffQuantity].gender == 'm') {
+
+            printf("Please setting the password  :");
+            rewind(stdin);
+            disable_echo();
+            (void)scanf("%s", firstPassword);
+            enable_echo();
+            while (1) {
+                printf("Please reenter the password  :");
+                rewind(stdin);
+                disable_echo();
+                (void)scanf("%s", secondPassword);
+                enable_echo();
+                if (strcmp(firstPassword, secondPassword) == 0) {
+                    strcpy(staff[staffQuantity].password, firstPassword);
+                    strcpy(staff[staffQuantity].staff_ID, id);
+                    printf("\nStaff added successful.\n");
+                    printf("Your id is:%s\n", id);
+                    staffQuantity++;
+                    break;
+                }
+                else {
+                    printf("Password does not match! Please enter again.\n");
+                }
+            }break;
+        }
+        else {
+            printf("Invalid gender input, please enter 'M' or 'F'\n");
+        }
+    }
+
+
+}
+void displayStaff(void) {
+    int i;
+    printf("\n\nStaff List:\n");
+    printf("----------------------------------------------------------------------\n");
+    printf("|  Staff ID  |        Name       | Gender |        Password          |\n");
+    printf("----------------------------------------------------------------------\n");
+    for (i = 0; i < staffQuantity; i++) {
+        printf("| %-10s | %-18s |   %-2c   | %-23s |\n", staff[i].staff_ID, staff[i].name, staff[i].gender, staff[i].password);
+    }
+    printf("----------------------------------------------------------------------\n");
+}
+void deleteStaff(void) {
+    char searchId[10] = "\0";
+    int i;
+    int j;
+    printf("\nPlease enter the staff ID you want to delete             :");
+    rewind(stdin);
+    (void)scanf("%s", searchId);
+    for (i = 0; i < staffQuantity; i++) {
+        if (strcmp(staff[i].staff_ID, searchId) == 0) {
+            printf("\tStaff Found!\n");
+            printf("Staff ID        : %s\n", staff[i].staff_ID);
+            printf("Name            : %s\n", staff[i].name);
+            printf("Gender          : %c\n", staff[i].gender);
+            printf("Do you want to delete this staff information?(1.Yes 2.No):");
+            (void)scanf("%d", &j);
+            if (j == 1) {
+                for (j = i; j < staffQuantity - 1; j++) {
+                    staff[j] = staff[j + 1];
+                }
+                staffQuantity--;
+                printf("\nStaff information delete successful!\n");
+                break;
+            }
+            else {
+                printf("\nNo staff information has been deleted.\n");
+                break;
+            }
+        }
+    }
+    if (i == staffQuantity) {
+        printf("No staff ID found.\n");
+    }
+
+}
+void modifyStaff(void) {
+    int failVerity;
+    do {
+        char id[20] = "\0";
+        int selection = 0;
+        char password[20] = "\0";
+        failVerity = 0;
+        printf("Please enter your staff id      :");
+        (void)scanf(" %s", id);
+        for (int i = 0; i < staffQuantity; i++) {
+            if (strcmp(staff[i].staff_ID, id) == 0) {
+                printf("Please enter your password      :");
+                disable_echo();
+                rewind(stdin);
+                (void)scanf(" %s", password);
+                enable_echo();
+                if (strcmp(staff[i].password, password) == 0) {
+                    printf("Your name     :%s\n", staff[i].name);
+                    printf("Your Staff Id :%s\n", staff[i].staff_ID);
+
+                    printf("What information do you want to modify?\n");
+                    printf("1.Name\n");
+                    printf("2.Password\n");
+                    printf("3.Id\n");
+                    printf("4.Back To Main Menu\n");
+                    printf("Please Enter Your Selection  : ");
+                    if (scanf(" %d", &selection) == 1) {
+                        if (selection == 1) {
+                            printf("Your New Name     :");
+                            (void)scanf(" %[^\n]", staff[i].name);
+
+                        }
+                        else if (selection == 2) {
+                            printf("Your New Password  :");
+                            disable_echo();
+                            (void)scanf(" %[^\n]", staff[i].password);
+                            enable_echo();
+                        }
+                        else if (selection == 3) {
+                            printf("Your New Id        :");
+                            (void)scanf(" %[^\n]", staff[i].password);
+
+                        }
+                        else if (selection == 4) {
+                            mainMenu();
+                        }
+                        else {
+                            printf("invalid selection please re-enter");
+                            rewind(stdin);
+                            modifyMember();
+                        }
+                        printf("Your Information Is Complete Modify\n");
+                        rewind(stdin);
+                        mainMenu();
+                    }
+                    else {
+                        printf("invalid selection please re-enter");
+                        modifyStaff();
+                    }
+                }
+
+            }
+        }
+        printf("invalid id, please re-enter");
+        failVerity = 1;
+    } while (failVerity == 1);
+}
+void viewReview(void) {
+    printf("\n                Comment\n");
+    printf("===========================================\n");
+    for (int i = 0; i < commentQuantity; i++) {
+        printf("Member ID :%s\n", comment[i].memberId);
+        printf("About :%s\n", comment[i].commentType);
+        printf("Content :%s\n\n", comment[i].commentContent);
+    }
+}
+void Comment(void) {
+    int choice = 0;
+    int currentId = memberLogin();
+    do {
+        printf("What do you want to comment about?\n");
+        printf("1.Train System\n");
+        printf("2.Ticket System\n");
+        printf("3.Member System\n");
+        printf("4.Other\n");
+        printf("Your Option : ");
+    } while (scanf(" %d", &choice) != 1);
+    switch (choice)
+    {
+    case 1:
+        strcpy(comment[commentQuantity].commentType, "Train System");
+        break;
+    case 2:
+        strcpy(comment[commentQuantity].commentType, "Ticket System");
+        break;
+    case 3:
+        strcpy(comment[commentQuantity].commentType, "Member System");
+        break;
+    case 4:
+        strcpy(comment[commentQuantity].commentType, "Other");
+        break;
+    default:
+        Comment();
+
+    }
+    rewind(stdin);
+    printf("About: %s\n", comment[commentQuantity].commentType);
+    printf("Content：");
+    (void)scanf("%[^\n]", comment[commentQuantity].commentContent);
+
+
+    strcpy(comment[commentQuantity].memberId, member[currentId].member_ID);
+    printf("Thanks For Your Comment We Will Improve Again!\n");
+
+    commentQuantity++;
+}
+
+//Member Module
+void displayMember(void) {
+    int foundTickets = 0;
+
+    for (int l = 0; l < memberQuantity; l++) {
+        printf("\nMember Id             :%s\n", member[l].member_ID);
+        printf("Member Name           :%s\n", member[l].name);
+        printf("Member Gender         :%c\n", member[l].gender);
+        printf("Member Ic             :%s\n", member[l].ic);
+
+        for (int i = 0; i < trainQuantity; i++) {
+            int foundSeat = 0;
+            for (int j = 250; j > train[i].seats; j--) {
+                if (strcmp(ticket[i][j].memberId, member[l].member_ID) == 0) {
+                    // Display ticket information for tickets booked by the current member
+                    if (foundSeat == 0) {
+                        printf("Your order is:\n");
+                        printf("Ticket Id         : A%02d\n", ticket[i][j].ticketId);
+                        printf("Member Id         : %s\n", ticket[i][j].memberId);
+                        printf("Train Id          : %s\n", train[i].Id);
+                        printf("Booking Date      : %s\n", ticket[i][j].bookingDate);
+                        printf("Departure Station : %s\n", train[i].departureSta);
+                        printf("Arrival Station   : %s\n", train[i].arrivalSta);
+                        printf("Departure Date    : %s\n", train[i].departureDate);
+                        printf("Payment Method    : %s\n", ticket[i][j].paymentInfo);
+                        printf("Your Seat Number  : ");
+                        foundSeat = 1;
+                    }
+
+                    printf("%c%d,", ticket[i][j].seatPrefix, ticket[i][j].seatNum);
+
+
+
+
+                    foundTickets = 1; // Set flag to indicate at least one ticket was found
+                }
+
+            }
+            
+        }
+        printf("\b");
+        printf("\n");
+    }
+
+
+    if (!foundTickets) {
+        printf("No tickets found for member %s.\n", currentMemberId);
+    }
+}
+void addmember(void) {
+    char newPassword[100] = "\0";
+    char confirmPassword[100] = "\0";
+    int select = 0;
+    int failSelect = 0;
+
+    srand(time(NULL)); // Seed the random number generator with the current time
+
+    // Generate the random ID
+    char id[ID_LENGTH + 1]; // +1 for the null terminator
+    for (int i = 0; i < ID_LENGTH; i++) {
+        if (i % 2 == 0) {
+            id[i] = generateRandomChar(); // Generate a random character for even positions
+        }
+        else {
+            id[i] = '0' + generateRandomDigit(); // Generate a random digit for odd positions
+        }
+    }
+    id[ID_LENGTH] = '\0'; // Null-terminate the string
+
+    printf("Please enter your name: ");
+    rewind(stdin);
+    (void)scanf("%[^\n]", member[memberQuantity].name);
+
+    do {
+        printf("Please enter your gender (M/F): ");
+        (void)scanf(" %c", &member[memberQuantity].gender);
+    } while (!(member[memberQuantity].gender == 'F' || member[memberQuantity].gender == 'f' ||
+        member[memberQuantity].gender == 'M' || member[memberQuantity].gender == 'm'));
+
+    printf("Please enter your IC number with '-': ");
+    (void)scanf(" %[^\n]", member[memberQuantity].ic);
+
+    printf("Please enter your new password: ");
+    disable_echo();
+    (void)scanf(" %[^\n]", newPassword);
+    enable_echo();
+    do {
+        printf("Please confirm your password: ");
+        disable_echo();
+        (void)scanf(" %[^\n]", confirmPassword);
+        enable_echo();
+    } while (strcmp(confirmPassword, newPassword) != 0);
+    do {
+
+        printf("Your password is set!\n");
+        strcpy(member[memberQuantity].password, newPassword);
+        printf("Please select a security question.\n");
+        printf("1.What is your place of birth?\n");
+        printf("2.What is your favorite food?\n");
+        printf("3.What is your favorite movie?\n");
+        printf("4.What brand was your first car?\n");
+        printf("5.Who was your childhood best friend?\n");
+        (void)scanf("%d", &select);
+        if (select == 1) {
+            strcpy(member[memberQuantity].recoveryPass, "What is your place of birth?");
+        }
+        else if (select == 2) {
+            strcpy(member[memberQuantity].recoveryPass, "What is your favorite food?");
+        }
+        else if (select == 3) {
+            strcpy(member[memberQuantity].recoveryPass, "What is your favorite movie?");
+        }
+        else if (select == 4) {
+            strcpy(member[memberQuantity].recoveryPass, "What brand was your first car?");
+        }
+        else if (select == 5) {
+            strcpy(member[memberQuantity].recoveryPass, "Who was your childhood best friend?");
+        }
+        else {
+            printf("Invalid Selection ,Please Enter Again.");
+            failSelect = 1;
+        }
+
+    } while (failSelect == 1);
+
+
+    printf("Provide the answer to reset your password when you forgot your password.\n");
+    disable_echo();
+    (void)scanf(" %[^\n]", member[memberQuantity].recPassword);
+    enable_echo();
+    printf("Generated ID: %s\n", id);
+    strcpy(member[memberQuantity].member_ID, id);
+    printf("All set!\n");
+
+
+    // Increment member quantity for next member
+    memberQuantity++;
+
+}
+void deleteMember(void) {
+    char searchId[10] = "\0";
+    int i;
+    int j;
+    printf("Please enter the member ID you want to delete             :");
+    rewind(stdin);
+    (void)scanf("%s", searchId);
+    for (i = 0; i < memberQuantity; i++) {
+        if (strcmp(member[i].member_ID, searchId) == 0) {
+            printf("\tMember Found! \n");
+            printf("Member ID   : %s\n", member[i].member_ID);
+            printf("Name        : %s\n", member[i].name);
+            printf("Gender      : %c\n", member[i].gender);
+            printf("Do you want to delete this member information?(1.Yes 2.No):");
+            (void)scanf("%d", &j);
+            if (j == 1) {
+                for (j = i; j < memberQuantity - 1; j++) {
+                    member[j] = member[j + 1];
+                }
+                memberQuantity--;
+                printf("\nStaff information delete successful!\n");
+                break;
+            }
+            else {
+                printf("\nNo staff information has been deleted.\n");
+                break;
+            }
+        }
+    }
+    if (i == memberQuantity) {
+        printf("No staff ID found.\n");
+    }
+
+}
+void memberModule(void) {
+    int choice = '\0';
+    do {
+        choice = '\0';
+        printf("--------------------------------------------\n");
+        printf("|Please choose your action:                |\n");
+        printf("|------------------------------------------|\n");
+        printf("|1. Login                                  |\n");
+        printf("|2. Sign up                                |\n");
+        printf("|3. Sign out                               |\n");
+        printf("|4. Log out member                         |\n");
+        printf("|5. Modify Information                     |\n");
+        printf("|6. Display Information                    |\n");
+        printf("|7. Make Comment                           |\n");
+        printf("|8. Check Ticket                           |\n");
+        printf("|9. Return to the main menu                |\n");
+        printf("|------------------------------------------|\n");
+        printf("Select:");
+        rewind(stdin);
+        (void)scanf(" %d", &choice);
+        if (choice == 1) {
+            memberLogin();
+        }
+        else if (choice == 2) {
+            addmember();
+        }
+        else if (choice == 3) {
+            signOut();
+        }
+        else if (choice == 4) {
+            logOut();
+        }
+        else if (choice == 5) {
+            modifyMember();
+        }
+        else if (choice == 6) {
+            displayMemberInformation();
+        }
+        else if (choice == 7) {
+            Comment();
+        }
+        else if (choice == 8) {
+            displayMemberTickets();
+        }
+
+    } while (choice != 9);
+}
+int memberLogin(void) {
+    char id[100] = "\0";
+    char password[100] = "\0";
+    int loginSuccess = 0;
+
+    do {
+        if (loggedInMemberIndex == -1) {
+            if (memberQuantity < 1) {
+                printf("Please Sign In First\n");
+                memberModule();
+            }
+            else {
+
+                printf("Please enter your id:");
+                rewind(stdin);
+                (void)scanf(" %[^\n]", id);
+
+                int foundId = 0;
+
+                for (int i = 0; i < memberQuantity; i++) {
+                    if (strcmp(id, member[i].member_ID) == 0) {
+                        foundId = 1;
+                        do {
+                            printf("Please enter your password (If you Want To Recovery Your Password Enter recovery):");
+                            rewind(stdin);
+                            disable_echo();
+                            (void)scanf("%[^\n]", password);
+                            enable_echo();
+                            if (strcmp(password, "recovery") == 0) {
+                                recoveryPassId = i;
+                                recoveryPassword();
+                            }
+                            if (strcmp(password, member[i].password) == 0) {
+                                loggedInMemberIndex = i;
+                                printf("Login successful!\n");
+                                strcpy(currentMemberId, member[i].member_ID);
+                                loginSuccess = 2;
+
+                            }
+                            else {
+                                printf("Invalid password please try again!\n");
+                                
+                            }
+                        } while (loginSuccess != 2);
+
+                    }
+                }
+
+                if (foundId !=1) {
+                    printf("Invalid ID. Please try again!\n");
+                    memberModule();
+                }
+            }
+        }
+        else {
+            loginSuccess = 1;
+            return loggedInMemberIndex;
+        }
+
+    } while (loginSuccess != 0);
+}
+void logOut(void) {
+    char id[20] = "\0";
+    char password[20] = "\0";
+    int failpassword;
+    printf("Please enter your member id   :");
+    (void)scanf("%s", id);
+    for (int i = 0; i < memberQuantity; i++) {
+        if (strcmp(member[i].member_ID, id) == 0) {
+            do {
+                failpassword = 0;
+                printf("Please enter your password   :");
+                (void)scanf("%s", password);
+
+                if (strcmp(member[i].password, password) == 0) {
+                    for (int j = i + 1; j < memberQuantity; j++) {
+                        member[i] = member[j];
+                    }
+                    memberQuantity--;
+                    loggedInMemberIndex = -1;
+                    printf("Member Delete Complete\n");
+                    mainMenu();
+                }
+                else {
+                    printf("Wrong password please re-enter\n");
+                    failpassword = 1;
+                }
+            } while (failpassword == 1);
+        }
+
+    }
+    printf("Invalid Id %s", id);
+
+}
+void displayMemberTickets() {
+    // Loop through all tickets to find the ones booked by the current member
+    int foundTickets = 0; // Flag to track if any tickets were found for the member
+    int foundSeat = 0;
+    int a = 0;
+    int currentId = memberLogin();
+    for (int l = 0; l < memberQuantity; l++) {
+        if (strcmp(member[l].member_ID, member[currentId].member_ID) == 0) {
+            a = l;
+        }
+    }
+    for (int i = 0; i < trainQuantity; i++) {
+        for (int j = 250; j > train[i].seats; j--) {
+            if (strcmp(ticket[i][j].memberId, member[a].member_ID) == 0) {
+                if (foundSeat == 0) {
+                    printf("Your order is:\n");
+                    printf("Ticket Id         : A%02d\n", ticket[i][j].ticketId);
+                    printf("Member Id         : %s\n", ticket[i][j].memberId);
+                    printf("Train Id          : %s\n", train[i].Id);
+                    printf("Booking Date      : %s\n", ticket[i][j].bookingDate);
+                    printf("Departure Station : %s\n", train[i].departureSta);
+                    printf("Arrival Station   : %s\n", train[i].arrivalSta);
+                    printf("Departure Date    : %s\n", train[i].departureDate);
+                    printf("Payment Method    : %s\n", ticket[i][j].paymentInfo);
+                    printf("Total Price       : RM%.2f\n", member[a].priceAmount);
+                    printf("Your Seat Number  : ");
+                    foundSeat = 1;
+                }
+                printf("%c%d,", ticket[i][j].seatPrefix, ticket[i][j].seatNum);
+
+                foundTickets = 1; // Set flag to indicate at least one ticket was found
+            }
+
+        }
+        printf("\n");
+        foundSeat = 0;
+    }
+
+    if (!foundTickets) {
+        printf("No tickets found for member %s.\n", currentMemberId);
+    }
+}
+void checkMember(void) {
+    char check[100] = "\0";
+    while (1) {
+        printf("Did you registered your member account:");
+        (void)scanf("%s", check);
+        if (strcmp(check, "YES") == 0) {
+            ticketModule();
+            break;
+        }
+        else if (strcmp(check, "NO") == 0) {
+            addmember();
+            ticketModule();
+            break;
+        }
+        else {
+            printf("Invalid answer please answer YES or NO\n");
+
+        }
+    }
+}
+void modifyMember() {
+    int currentId = memberLogin();
+    choose = 0;
+    int failSelect = 0;
+    int selection = 0;
+    printf("What information do you want to modify?\n");
+    printf("1.Name\n");
+    printf("2.Password\n");
+    printf("3.Recovery Quetion\n");
+    printf("4.Recovery Answer\n");
+    printf("5.Back To Main Menu\n");
+    printf("Please Enter Your Selection  : ");
+    if (scanf("%d", &selection) == 1) {
+        if (selection == 1) {
+            printf("Your New Name     :");
+            rewind(stdin);
+            (void)scanf(" %[^\n]", member[currentId].name);
+
+        }
+        else if (selection == 2) {
+            printf("Your New Password  :");
+            rewind(stdin);
+            disable_echo();
+            (void)scanf(" %[^\n]", member[currentId].password);
+            enable_echo();
+        }
+        else if (selection == 3) {
+            do {
+                failSelect = 0;
+                printf("Please select a security question.\n");
+                printf("1.What is your place of birth?\n");
+                printf("2.What is your favorite food?\n");
+                printf("3.What is your favorite movie?\n");
+                printf("4.What brand was your first car?\n");
+                printf("5.Who was your childhood best friend?\n");
+                rewind(stdin);
+                (void)scanf("%d", &choose);
+                if (choose == 1) {
+                    strcpy(member[currentId].recoveryPass, "What is your place of birth?");
+                }
+                else if (choose == 2) {
+                    strcpy(member[currentId].recoveryPass, "What is your favorite food?");
+                }
+                else if (choose == 3) {
+                    strcpy(member[currentId].recoveryPass, "What is your favorite movie?");
+                }
+                else if (choose == 4) {
+                    strcpy(member[currentId].recoveryPass, "What brand was your first car?");
+                }
+                else if (choose == 5) {
+                    strcpy(member[currentId].recoveryPass, "Who was your childhood best friend?");
+                }
+                else {
+                    printf("Invalid Selection ,Please Enter Again.");
+                    failSelect = 1;
+                }
+            } while (failSelect == 1);
+        }
+        else if (selection == 4) {
+            printf("Please enter your new answer for the question\n");
+            printf("%s\n", member[currentId].recPassword);
+            rewind(stdin);
+            disable_echo();
+            (void)scanf("%[^\n]", member[currentId].recPassword);
+            enable_echo();
+        }
+        else if (selection == 5) {
+            mainMenu();
+        }
+        else {
+            printf("invalid selection please re-enter");
+            rewind(stdin);
+            modifyMember();
+        }
+        printf("Your Information Is Complete Modify\n");
+        rewind(stdin);
+        mainMenu();
+    }
+    else {
+        printf("invalid selection please re-enter");
+        modifyMember();
+    }
+
+}
+void displayMemberInformation() {
+    int foundTickets = 0;
+    int currentId = memberLogin();
+    printf("Member Id     :%s\n", member[currentId].member_ID);
+    printf("Member Name   :%s\n", member[currentId].name);
+    printf("Member Gender :%c\n", member[currentId].gender);
+    printf("Member Ic     :%s\n", member[currentId].ic);
+
+    for (int i = 0; i < trainQuantity; i++) {
+        int foundSeat = 0;
+        for (int j = 250; j > train[i].seats; j--) {
+            if (strcmp(ticket[i][j].memberId, member[currentId].member_ID) == 0) {
+                // Display ticket information for tickets booked by the current member
+                if (foundSeat == 0) {
+                    printf("Your order is:\n");
+                    printf("Ticket Id         : A%02d\n", ticket[i][j].ticketId);
+                    printf("Member Id         : %s\n", ticket[i][j].memberId);
+                    printf("Train Id          : %s\n", train[i].Id);
+                    printf("Booking Date      : %s\n", ticket[i][j].bookingDate);
+                    printf("Departure Station : %s\n", train[i].departureSta);
+                    printf("Arrival Station   : %s\n", train[i].arrivalSta);
+                    printf("Departure Date    : %s\n", train[i].departureDate);
+                    printf("Payment Method    : %s\n", ticket[i][j].paymentInfo);
+                    printf("Your Seat Number  : ");
+                    foundSeat = 1;
+                }
+
+                printf("%c%d,", ticket[i][j].seatPrefix, ticket[i][j].seatNum);
+
+
+
+
+                foundTickets = 1; // Set flag to indicate at least one ticket was found
+            }
+
+        }
+        printf("\b");
+        printf("\n");
+    }
+    if (foundTickets == 0) {
+        printf("No tickets found");
+    }
+
+}
+void signOut(void) {
+    loggedInMemberIndex = -1;
+    printf("Sign Out Successful\n");
+    memberModule();
+}
+void recoveryPassword(void) {
+    int failAnswer = 0;
+    char answer[100] = "\0";
+    do {
+
+        printf("Please provide the correct answer to reset your password.\n");
+        printf("%s\n", member[recoveryPassId].recoveryPass);
+        disable_echo();
+        (void)scanf(" %[^\n]", answer);
+        enable_echo();
+        if (strcmp(member[recoveryPassId].recPassword, answer) == 0) {
+            printf("Please enter your new password     :");
+            disable_echo();
+            (void)scanf(" %s", member[recoveryPassId].password);
+            enable_echo();
+            printf("Your password is reset complete.\n");
+            memberLogin();
+        }
+        else {
+            printf("Wrong answer please enter again.\n");
+            failAnswer = 1;
+        }
+    } while (failAnswer == 1);
+}
+
+//Train Module
+void trainModule(void) {
+    int choice = '\0';
+    do {
+        choice = '\0';
+        printf("     __\n");
+        printf("    /|||\\`.__\n");
+        printf("  (   _    _ _\\\n");
+        printf("===`-()--()-'\n");
+        printf("\n---------------------------------------------\n");
+        printf("|             Train Scheduling              |\n");
+        printf("|                                           |\n");
+        printf("|Please choose your action:                 |\n");
+        printf("|-------------------------------------------|\n");
+        printf("|1. Add train schedule                      |\n");
+        printf("|2. Search train ID                         |\n");
+        printf("|3. Modify train schedule                   |\n");
+        printf("|4. Delete train                            |\n");
+        printf("|5. Display all train schedule              |\n");
+        printf("|6. Make comment                            |\n");
+        printf("|7. Return to the main menu                 |\n");
+        printf("---------------------------------------------\n");
+        printf("Select:");
+        rewind(stdin);
+        (void)(void)scanf(" %d", &choice);
+        if (choice == 1) {
+            addTrain();
+        }
+        else if (choice == 2) {
+            searchSchedule();
+        }
+        else if (choice == 3) {
+            modifySchedule();
+        }
+        else if (choice == 4) {
+            deleteSchedule();
+        }
+        else if (choice == 5) {
+            displaySchedule();
+        }
+        else if (choice == 6) {
+            Comment();
+        }
+    } while (choice != 7);
+
+}
+void addTrain(void) {
+
+    char trainId[6] = "\0";
+    printf("\nTrain Id                :");
+    rewind(stdin);
+    (void)(void)scanf("%s", trainId);
+    for (int i = 0; i < trainQuantity; i++) {
+        if (strcmp(train[i].Id, trainId) == 0) {
+            printf("The Id %s Is Avalable\n", trainId);
+            addTrain();
+        }
+
+    }
+    strcpy(train[trainQuantity].Id, trainId);
+    printf("Departure Station       :");
+    rewind(stdin);
+    (void)scanf("%[^\n]", train[trainQuantity].departureSta);
+    printf("Arrive Station          :");
+    rewind(stdin);
+    (void)scanf("%[^\n]", train[trainQuantity].arrivalSta);
+    printf("Departure Date          :");
+    rewind(stdin);
+    (void)scanf("%s", train[trainQuantity].departureDate);
+    printf("Arrive Date             :");
+    rewind(stdin);
+    (void)scanf("%s", train[trainQuantity].arriveDate);
+    printf("Depature Time           :");
+    rewind(stdin);
+    (void)scanf("%d", &train[trainQuantity].departureTime);
+    printf("Arrive Time             :");
+    rewind(stdin);
+    (void)scanf("%d", &train[trainQuantity].arriveTime);
+    printf("Price                   :");
+    rewind(stdin);
+    (void)scanf("%f", &train[trainQuantity].price);
+    train[trainQuantity].seats = 250;
+    printf("\nAdd Train Successful\n");
+    trainQuantity++;
+}
+void searchSchedule(void) {
+    char trainId[10];
+    int found = 0;
+
+    printf("Enter the train ID to search: ");
+    if (scanf("%9s", trainId) != 1) {
+        printf("Invalid input. Please try again.\n");
+        while ((getchar()) != '\n');
+        mainMenu();
+    }
+
+    trainId[9] = '\0';
+
+    printf("Search Results:\n");
+    printf("-------------------------------------------------------------------------------------------------------------------\n");
+    printf("| %-10s | %-30s | %-30s | %-11s | %-11s | %-12s | %-12s | %-5s | %-10s |\n", "Train ID", "Departure Station", "Arrival Station", "Departure Date", "Arrival Date", "Departure Time", "Arrival Time", "Seats", "Price");
+    printf("-------------------------------------------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < trainQuantity; i++) {
+        if (strcmp(train[i].Id, trainId) == 0) {
+            printf("| %-10s | %-30s | %-30s | %-11s | %-11s | %-12d | %-12d | %-5d | %-10.2f |\n",
+                train[i].Id, train[i].departureSta, train[i].arrivalSta,
+                train[i].departureDate, train[i].arriveDate,
+                train[i].departureTime, train[i].arriveTime,
+                train[i].seats, train[i].price);
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("No train found with ID %s.\n", trainId);
+    }
+
+}
+void modifySchedule(void) {
+
+    char trainId[10] = "\0";
+    int found = 0;
+
+    printf("\nEnter Train ID to modify: ");
+    (void)scanf("%s", trainId);
+
+    for (int i = 0; i < trainQuantity; i++) {
+        if (strcmp(train[i].Id, trainId) == 0) {
+            found = 1;
+            printf("\nTrain found. Enter new data:\n");
+
+            printf("Departure Station: ");
+            (void)scanf(" %[^\n]", train[i].departureSta);
+            printf("Arrival Station: ");
+            (void)scanf(" %[^\n]", train[i].arrivalSta);
+            printf("Departure Date (DD/MM/YYYY): ");
+            (void)scanf(" %s", train[i].departureDate);
+            printf("Arrival Date (DD/MM/YYYY): ");
+            (void)scanf(" %s", train[i].arriveDate);
+            printf("Departure Time: ");
+            (void)scanf(" %d", &train[i].departureTime);
+            printf("Arrival Time: ");
+            (void)scanf(" %d", &train[i].arriveTime);
+            printf("Price: ");
+            (void)scanf(" %f", &train[i].price);
+
+            printf("\nTrain schedule modified successfully.\n");
+            break;
+        }
+    }
+    if (!found) {
+        printf("\nTrain with ID %s not found.\n", trainId);
+    }
+}
+void displaySchedule(void) {
+    if (trainQuantity == 0) {
+        printf("No trains scheduled.\n");
+        printf("Please wait for the latest train schedule \n");
+        mainMenu();
+    }
+
+    printf("Train Schedule:\n");
+    printf("------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+    printf("%5s %-10s %-20s %-20s %-20s %-20s %-20s %-15s %-10s\n", "No.", "Train ID", "Departure Station", "Arrival Station", "Departure Date", "Arrive Date", "Departure Time", "Arrival Time", "Available Seats");
+    printf("------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < trainQuantity; i++) {
+        printf("%5d. %-10s %-20s %-20s %-20s %-20s %-20d %-15d %-10d\n", i, train[i].Id, train[i].departureSta, train[i].arrivalSta, train[i].departureDate, train[i].arriveDate, train[i].departureTime, train[i].arriveTime, train[i].seats);
+    }
+
+    printf("------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+}
+void deleteSchedule(void) {
+    char trainId[10];
+    int foundId = 0;
+    printf("Enter the train ID: ");
+    if (scanf("%9s", trainId) != 1) {
+        printf("Invalid input. Please try again.\n");
+        while ((getchar()) != '\n');
+        mainMenu();
+    }
+
+    trainId[9] = '\0';
+
+    // Search for the train to be deleted
+    for (int i = 0; i < trainQuantity; i++) {
+        if (strcmp(train[i].Id, trainId) == 0) {
+            foundId = 1;
+            for (int s = i; s < trainQuantity - 1; s++) {
+                train[s] = train[s + 1];
+            }
+            trainQuantity--;
+            printf("Train with ID %s deleted successfully.\n", trainId);
+            
+        }
+    }
+    if (foundId == 0) {
+        printf("Train with ID %s not found.\n", trainId);
+    }
+}
+
+//Ticket Module
+void ticketModule(void) {
+
+    char paymentMethod[20];
+    char password[100];
+    double priceAmount = 0;
+    int currentId = 0;
+
+    currentId = memberLogin();
+    displaySchedule();
+
+    printf("Please enter the No. of the train that you want to book: ");
+
+    if (scanf(" %d", &bookingNo) != 1 || bookingNo >= trainQuantity || train[bookingNo].seats <= 0) {
+        printf("Invalid selection or the train is already sold out.\n");
+
+        ticketModule();
+    }
+
+    printf("Ticket amount: ");
+    rewind(stdin);
+    (void)scanf("%d", &amount);
+
+    printf("Select a payment method:\n");
+    printf("1. Maybank 2U\n");
+    printf("2. FPX\n");
+    printf("3. Jompay\n");
+    printf("4. Touch N Go eWallet\n");
+
+    do {
+        printf("Please enter your choice: ");
+        rewind(stdin);
+        if (scanf("%d", &choose) == 0) { choose = 0; }
+        switch (choose) {
+        case 1:
+            strcpy(paymentMethod, "Maybank 2U");
+            payment = 1;
+            break;
+        case 2:
+            strcpy(paymentMethod, "FPX");
+            payment = 1;
+            break;
+        case 3:
+            strcpy(paymentMethod, "Jompay");
+            payment = 1;
+            break;
+        case 4:
+            strcpy(paymentMethod, "Touch N Go eWallet");
+            payment = 1;
+            break;
+        default:
+            printf("Invalid payment method. Please try again.\n");
+            break;
+        }
+    } while (payment == 0);
+    char seatPrefix;
+    int failSeats = 0;
+    int seatNum;
+
+
+    for (int i = 0; i < amount; i++) {
+        do {
+            failSeats = 0;
+            printf("Please enter your seat number (exp: A01): ");
+
+            rewind(stdin);
+            (void)scanf(" %c%d", &seatPrefix, &seatNum);
+
+            if (seatNum < 1 || seatNum > 9 || (seatPrefix < 'A' || seatPrefix > 'Z')) {
+                printf("Invalid seat number. Please try again.\n");
+                // To repeat the loop for the same index
+                failSeats = 1;
+            }
+            else {
+                for (int a = 250; a > train[bookingNo].seats; a--) {
+                    // Check if the seat is available
+                    if (ticket[bookingNo][a].seatPrefix == seatPrefix) {
+                        if (ticket[bookingNo][a].seatNum == seatNum) {
+                            printf("Sorry, the seat is already booked. Please select another seat.\n");
+
+                            failSeats = 1;
+                        }
+                    }
+                }
+            }
+        } while (failSeats == 1);
+
+        // Book the ticket
+        ticket[bookingNo][train[bookingNo].seats].ticketId = ticketQuantity;
+        ticket[bookingNo][train[bookingNo].seats].bookingNo = bookingNo;
+        strcpy(ticket[bookingNo][train[bookingNo].seats].memberId, member[currentId].member_ID);
+        strcpy(ticket[bookingNo][train[bookingNo].seats].bookingDate, get_today_date());
+        strcpy(ticket[bookingNo][train[bookingNo].seats].paymentInfo, paymentMethod);
+        ticket[bookingNo][train[bookingNo].seats].seatPrefix = seatPrefix;
+        ticket[bookingNo][train[bookingNo].seats].seatNum = seatNum;
+        priceAmount += train[bookingNo].price;
+        strcpy(ticket[bookingNo][train[bookingNo].seats].id, train[bookingNo].Id);
+
+
+        printf("Your Ticket Information:\n");
+        printf("Ticket Id         : A%02d\n", ticket[bookingNo][train[bookingNo].seats].ticketId);
+        printf("Member Id         : %s\n", ticket[bookingNo][train[bookingNo].seats].memberId);
+        printf("Train Id          : %s\n", ticket[bookingNo][train[bookingNo].seats].id);
+        printf("Booking Date      : %s\n", ticket[bookingNo][train[bookingNo].seats].bookingDate);
+        printf("Departure Station : %s\n", train[bookingNo].departureSta);
+        printf("Arrive Station    : %s\n", train[bookingNo].arrivalSta);
+        printf("Departure Date    : %s\n", train[bookingNo].departureDate);
+        printf("Arrive Date       : %s\n", train[bookingNo].arriveDate);
+        printf("Departure Time    : %d\n", train[bookingNo].arriveTime);
+        printf("Payment Method    : %s\n", ticket[bookingNo][train[bookingNo].seats].paymentInfo);
+        printf("Price             : RM%.2f\n", train[bookingNo].price);
+        printf("Your Seat Number  : %c%d\n", ticket[bookingNo][train[bookingNo].seats].seatPrefix, ticket[bookingNo][train[bookingNo].seats].seatNum);
+        ticketQuantity++;
+        train[bookingNo].seats--;
+    }
+
+    for (int j = 0; j < memberQuantity; j++) {
+        if (strcmp(member[j].member_ID, ticket[bookingNo][(train[bookingNo].seats) + 1].memberId) == 0) {
+            member[j].priceAmount = priceAmount;
+            printf("Total Price Amount: RM%.2f\n", member[j].priceAmount);
+        }
+    }
+
+    printf("Booking Success!\n");
+    system("pause");
+    mainMenu();
+
+}
+void ticketSite(void) {
+
+    int choice = '\0';
+    do {
+        choice = '\0';
+        printf("\n--------------------------------------------\n");
+        printf("|Please choose your action:                |\n");
+        printf("|------------------------------------------|\n");
+        printf("|1. Add ticket system                      |\n");
+        printf("|2. Search ticket                          |\n");
+        printf("|3. modifyTicket                           |\n");
+        printf("|4. Display ticket available               |\n");
+        printf("|5. book ticket                            |\n");
+        printf("|6. Make Comment                           |\n");
+        printf("|7. Return to the main menu                |\n");
+        printf("--------------------------------------------\n");
+        printf("Select:");
+        rewind(stdin);
+        (void)scanf("%d", &choice);
+        if (choice == 1) {
+            staffLogin();
+            addTrain();
+        }
+        else if (choice == 2) {
+            searchTicket();
+        }
+        else if (choice == 3) {
+            modifyTicket();
+        }
+        else if (choice == 4) {
+            displayTicket();
+        }
+        else if (choice == 5) {
+            checkMember();
+        }
+        else if (choice == 6) {
+            Comment();
+        }
+
+    } while (choice != 7);
+}
+void searchTicket(void) {
+    int num;
+    int foundTickets = 0; // Flag to track if any tickets were found for the member
+    int a = 0;
+    char id;
+
+    do{
+        printf("Enter your ticket ID  to search:");
+        rewind(stdin);
+        if (scanf(" %c %d", &id, &num) == 2) {
+            foundTickets = 0; // Reset foundTickets flag for each search
+            for (int j = 0; j < trainQuantity; j++) {
+                for (int i = 250; i > train[j].seats; i--) {
+                    if (ticket[j][i].ticketId == num) {
+                        if (foundTickets == 0) {
+                            printf("Your order is:\n");
+                            printf("Ticket Id         : A%02d\n", ticket[j][i].ticketId);
+                            printf("Member Id         : %s\n", ticket[j][i].memberId);
+                            printf("Train Id          : %s\n", train[ticket[j][i].bookingNo].Id);
+                            printf("Booking Date      : %s\n", ticket[j][i].bookingDate);
+                            printf("Departure Station : %s\n", train[ticket[j][i].bookingNo].departureSta);
+                            printf("Arrival Station   : %s\n", train[ticket[j][i].bookingNo].arrivalSta);
+                            printf("Departure Date    : %s\n", train[ticket[j][i].bookingNo].departureDate);
+                            printf("Payment Method    : %s\n", ticket[j][i].paymentInfo);
+                            printf("Total Price       : RM%.2f\n", member[a].priceAmount);
+                            printf("Your Seat Number  : ");
+                        }
+                        printf("%c%d,", ticket[j][i].seatPrefix, ticket[j][i].seatNum);
+                        foundTickets = 1; // Set flag to indicate at least one ticket was found
+                    }
+                }
+            }
+            printf("\n");
+            
+        }
+        else {
+            printf("Invalid input. Please re-enter.\n");
+        }
+    } while (foundTickets != 1);
+    if (foundTickets == 0) {
+        printf("Ticket with ID %d not found. Please try again!\n", id);
+    }
+    system("pause");
+    mainMenu();
+}
+void modifyTicket(void) {
+    char prefix;
+    int foundSeat = 0;
+
+    int num = 0;
+    do {
+        printf("Enter your ticket ID  to modify seat:");
+        rewind(stdin);
+        if (scanf(" %c %d", &prefix, &num) == 2) {
+            for (int i = 0; i < trainQuantity; i++) {
+                for (int j = 250; j > train[j].seats; j--) {
+                    
+                        if (ticket[i][j].ticketId == num) {
+                            
+                                printf("Your Current seat is %c%02d\n",ticket[i][j].seatPrefix,ticket[i][j].seatNum);
+                                do {
+                                    foundSeat = 0;
+                                    printf("Please enter your new seat number (exp: A01): ");
+                                    rewind(stdin);
+                                    (void)scanf(" %c %d", &prefix, &num);
+
+                                    if (num < 1 || num > 9 || (prefix < 'A' || prefix > 'Z')) {
+                                        printf("Invalid seat number. Please try again.\n");
+                                        modifyTicket();
+                                    }
+                                    else {
+                                        for (int a = 250; a > train[i].seats; a--) {
+                                            if (ticket[bookingNo][a].seatPrefix == prefix) {
+                                                if (ticket[bookingNo][a].seatNum == num) {
+                                                    printf("Sorry, the seat is already booked. Please select another seat.\n");
+                                                    foundSeat = 1;
+                                                }
+                                            }
+                                        }
+                                    }
+                                } while (foundSeat == 1);
+                                    ticket[i][j].seatPrefix = prefix;
+                                    ticket[i][j].seatNum = num;
+                                    printf("Your ticket ID has changed successfully!\n");
+                                    system("pause");
+                                    mainMenu();
+                                    break;
+                            
+                        }
+
+                    
+                }
+            }  
+        }
+        if (foundSeat == 0) {
+            printf("Invalid id number. Please try again!\n");
+        }
+    } while (foundSeat == 0);
+
+
+}
+void displayTicket(void) {
+    printf("%5s %-10s %-20s %-20s\n", "No.", "Train ID", "Available Seats", "Price");
+
+    for (int i = 0; i < trainQuantity; i++) {
+        printf("%5d. %-10s %-20d %.2f\n", i, train[i].Id, train[i].seats, train[i].price);
+    }
+    system("pause");
+    mainMenu();
+}
